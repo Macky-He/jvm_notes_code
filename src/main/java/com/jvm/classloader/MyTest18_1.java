@@ -9,7 +9,7 @@ public class MyTest18_1 {
         System.out.println("class: " + clazz.hashCode());
         System.out.println("class loader: " + clazz.getClassLoader());
 
-// 将zy/jvm/classloader/MyTest1.class文件拷贝到
+// com/jvm/classloader/MyTest1.class文件拷贝到
 // /Library/Java/JavaVirtualMachines/jdk1.8.0_112.jdk/Contents/Home/jre/classes 后运行
 // 运行结果   类由启动类加载器加载
         /*

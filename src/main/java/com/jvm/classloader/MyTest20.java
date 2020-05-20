@@ -7,8 +7,8 @@ public class MyTest20 {
         MyClassLoader loader1 = new MyClassLoader("loader1");
         MyClassLoader loader2 = new MyClassLoader("loader2");
 
-        Class<?> clazz1 = loader1.loadClass("zy.jvm.classloader.MyPerson");
-        Class<?> clazz2 = loader2.loadClass("zy.jvm.classloader.MyPerson");
+        Class<?> clazz1 = loader1.loadClass("com.jvm.classloader.MyPerson");
+        Class<?> clazz2 = loader2.loadClass("com.jvm.classloader.MyPerson");
 
         System.out.println(clazz1==clazz2);
         // 运行结果为  true

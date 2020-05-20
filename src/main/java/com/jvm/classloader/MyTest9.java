@@ -15,9 +15,7 @@ class Child extends Parent {
         System.out.println("Child static block");
     }
 }
-/**
- * @author zhangyan_g
- */
+
 public class MyTest9 {
     static {
         System.out.println("MyTest9 static block");

@@ -1,29 +1,26 @@
 package com.jvm.classloader;
 
 import java.lang.reflect.Method;
+
 /*
-将 MyPerson 类文件从 /Users/zhangyan/Documents/Learning/SelfCodes/jvm_lecture/out/production/classes
-移动至 /Users/zhangyan/Documents/Learning/SelfCodes/jvm_lecture/cpout 后，再运行
+将 MyPerson 类文件从 G:\my_github_repo\jvm_notes_code\target\classes
+移动至 G:\my_github_repo\jvm_notes_code\target\classes\ 后，再运行
  */
 public class MyTest21 {
     public static void main(String[] args) throws Exception {
         MyClassLoader loader1 = new MyClassLoader("loader1");
         MyClassLoader loader2 = new MyClassLoader("loader2");
 
-        loader1.setPath("/Users/zhangyan/Documents/Learning/SelfCodes/jvm_lecture/cpout/");
-        loader2.setPath("/Users/zhangyan/Documents/Learning/SelfCodes/jvm_lecture/cpout/");
+        loader1.setPath("G:\\my_github_repo\\jvm_notes_code\\target\\classes\\");
+        loader2.setPath("G:\\my_github_repo\\jvm_notes_code\\target\\classes\\");
 
-        Class<?> clazz1 = loader1.loadClass("zy.jvm.classloader.MyPerson");
-        Class<?> clazz2 = loader2.loadClass("zy.jvm.classloader.MyPerson");
+        Class<?> clazz1 = loader1.loadClass("com.jvm.classloader.MyPerson");
+        Class<?> clazz2 = loader2.loadClass("com.jvm.classloader.MyPerson");
 
         System.out.println(clazz1==clazz2);
         // 运行结果为
         /*
-findClass invoked: zy.jvm.classloader.MyPerson
-class loader name: loader1
-findClass invoked: zy.jvm.classloader.MyPerson
-class loader name: loader2
-false
+true
          */
         // 因为 MyPerson 类是由loader1 和 loader2 分别加载的，loader1和loader2从类加载的双亲委托机制来看没有任何关系，
         // 它们会在JVM内存中形成两个命名空间
@@ -42,7 +39,7 @@ Exception in thread "main" java.lang.reflect.InvocationTargetException
 	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
 	at java.lang.reflect.Method.invoke(Method.java:498)
 	at zy.jvm.classloader.MyTest21.main(MyTest21.java:34)
-Caused by: java.lang.ClassCastException: zy.jvm.classloader.MyPerson cannot be cast to zy.jvm.classloader.MyPerson
+Caused by: java.lang.ClassCastException: com.jvm.classloader.MyPerson cannot be cast to com.jvm.classloader.MyPerson
 	at zy.jvm.classloader.MyPerson.setMyPerson(MyPerson.java:7)
 	... 5 more
          */

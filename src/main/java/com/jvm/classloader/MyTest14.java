@@ -13,7 +13,7 @@ public class MyTest14 {
 //        System.out.println(classLoader);
         // 运行结果：sun.misc.Launcher$AppClassLoader@18b4aac2
 
-        String resourceName = "zy/jvm/classloader/MyTest14.class";
+        String resourceName = "com/jvm/classloader/MyTest14.class";
         // getResource() 根据资源名参数，找出所有的可以被字节码以某种方式访问到的代码资源，与代码位置无关
         Enumeration<URL> urls = classLoader.getResources(resourceName);
 
@@ -23,8 +23,7 @@ public class MyTest14 {
         }
         /*
         运行结果：
-file:/D:/gitRepo/jvm_lecture/out/production/classes/zy/jvm/classloader/MyTest14.class
-
+file:/G:/my_github_repo/jvm_notes_code/target/classes/com/jvm/classloader/MyTest14.class
          */
 
         System.out.println("--------------");

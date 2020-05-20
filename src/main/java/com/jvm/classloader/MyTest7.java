@@ -9,7 +9,7 @@ public class MyTest7 {
         // 返回 null，因为 java.lang.String 是由 bootstrap classloader加载
         System.out.println(clazz.getClassLoader());
 
-        Class<?> clazz2 = Class.forName("zy.jvm.classloader.C");
+        Class<?> clazz2 = Class.forName("com.jvm.classloader.C");
         // 返回 sun.misc.Launcher$AppClassLoader@18b4aac2，C 由应用类加载器加载
         System.out.println(clazz2.getClassLoader());
     }
