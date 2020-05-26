@@ -100,20 +100,68 @@
 ### 4.4 G1垃圾收集器
 ![HotSpot_JVM架构图](src/main/resources/img/HotSpot_JVM_Architecture.PNG)
 Oracle官方文档：https://www.oracle.com/technetwork/tutorials/tutorials-1876574.html
+#### 4.4.1 G1收集器基本概念
 * **响应能力**：响应能力是指应用程序或系统对请求的数据做出响应的速度。
-    * 对事件的响应速度
+    * 桌面用户界面对事件的响应速度
     * 网站返回一个页面的速度
     * 数据库返回一个查询的速度
 * **吞吐量**：吞吐量专注于最大程度地提高应用程序在特定时间段内的工作量。
     * 在给定时间内完成的事务数
     * 批处理程序在一小时内可以完成的工作数
     * 一小时内可以完成的数据库查询数
+* 分区（Region）：堆被划分为一组大小相等的堆区域，堆区域间（region）不连续，每个区域都有一个连续的虚拟内存范围。
+    * region被赋予和老的垃圾收集器同样的角色：Eden、Survivor、Old
+    * 一个Region的大小可以通过参数-XX:G1HeapRegionSize设定，取值范围从1M到32M，且是2的指数。
+* 收集集合（CSet）：一组可被回收的分区集合。在CSet中存活的数据会在GC过程中被移到另一个可用的分区中，CSet中的分区可以来自eden、survivor、old角色分区；
+* 已记忆集合（RSet）：RSet中记录了其他region中的对象引用本region中对象的关系，属于point-into结构（谁引用了我的对象）。RSet
+的价值在于使得垃圾收集器不再扫描整个堆找到谁引用了当前分区的对象，只需要扫描RSet即可。
+* Snapshot-At-The-Beginning（SATB）:是GC开始时的一个存活对象的快照。通过Root Tracing得到，作用是为了维持并发GC的准确定。
+* Humongous区域：如果一个对象占用的空间达到了或是超过了region容量的50%以上，
+#### 4.4.2 G1的堆分配方式
+![](src/main/resources/img/Slide9.PNG)
+* G1收集器堆结构
+    * heap区域被划分成相等大小的不连续的内存区域（regions），每个regions都有一个分代角色：eden、survivor、old
+    * 每个角色的数量没有强制限定，G1会动态的去调整每个角色的regions个数
+    * G1的特点是高效的执行回收，优先去执行大量对象可回收的区域（regions）
+    * G1使用了GC停顿可预测模型，来满足用户设定的GC停顿时间，根据用户设置的停顿时间，G1会自动的选择哪些region需要清除，一次清除多少个region    
+    * G1从多个region中复制存活的对象，然后集中放入到一个region中，同时整理、清除内存（copying收集算法）
 * 特点
+    * G1收集器是一个面向服务端的垃圾收集器，适用于多核处理器、大内存容量的服务端系统
+    * 满足于短时间GC停顿的同时达到一个较高的吞吐量
+    * Java 7 Update 9或更高版本以上适用
     * 和CMS垃圾收集器一样都支持和应用程序线程并发操作
-    * 不会长时间的停顿去进行空闲空间的整理
+    * 不会长时间的停顿去进行空闲空间的整理（CMS只能在fullGC时，用STW整理内存碎片）
     * 需要更多可预测的GC暂停时间
     * 不会对吞吐量造成影响
-    * 不需要更大的堆空间
-#### 4.1 G1的堆分配方式
-![](src/main/resources/img/Slide9.PNG)
-    
+    * 不需要更大的堆空间（CMS需要预留空间存储浮动垃圾）
+* **G1 VS CMS**
+    * CMS使用mark-sweep算法，会产生内存碎片；G1使用copying算法，不会造成内存碎片
+    * 对比Parallel Scavenge（基于copying）、Parallel Old收集器（基于mark-compact-sweep）、Parallel对整个内存区域进行整理，GC停顿时间较长；G1对特定region
+    进行整理，GC停顿时间较短
+#### 4.4.3 GC模式
+&nbsp;&nbsp;&nbsp;&nbsp;G1提供了两种GC模式：Young GC和Mixed GC，两种都是完全Stop The Word的。
+* Young GC：选定所有年轻到里的Region。通过控制年轻代Region的个数，即年轻代内存的大小，来控制Young GC的时间开销。
+* Mixed GC：选定所有年轻代里的Region，外加根据global concurrent marking统计得出的收集效益最高的老年代Region。在用户指定的停顿时间内尽可能的选择收益高的老年代Region。
+* Full GC：Mixed GC不是Full GC，它只能回收部分年老代的Region，如果Mixed GC实在无法跟上程序分配内存的速度，Mixed GC就会膨胀为Serial Old GC（Full GC）来收集整个GC
+ Heap。所以本质上，G1是不提供Full GC的
+#### 4.4.4 global concurrent marking
+&nbsp;&nbsp;&nbsp;&nbsp;global concurrent marking的执行过程类似于CMS，但是不同的是：在G1 GC中，它主要是为Mixed GC提供标记服务的，并不是一次GC过程的必须过程。
+* global concurrent marking执行步骤：
+    1. 初始标记（initial mark，STW）：它标记了从GC Root开始直接可达的对象。（共用Young GC的暂停，复用root scan操作）
+    2. 并发标记（concurrent mark）：这个阶段从GC Root开始对heap中的对象进行标记，标记线程和应用线程并发执行，并且收集各个region中的存活对象的信息
+    3. 重新标记（remark）：标记在并发标记阶段变化的对象
+    4. 清理（cleanup）：清除空region（没有存活对象的），加入到free list中 
+#### 4.4.8 常用G1参数
+| 参数名 | 含义 | 
+| :------ | :------ |
+| G1HeapWastePercent | 在global concurrent marking之后,我们可以知道有多少old generation regions中有多少空间可以回收，在每次Young GC之后和再次发生Mixed GC之前都会检查垃圾占比是否达到此参数，达到后才会发生下次Mixed GC | 
+| G1MixedGCLiveThresholdPercent | old generation regions中存活对象的占比，只有在此参数之下才会被选入CSet中，默认值为85% | 
+| G1MixedGCCountTarget | 一次global concurrent marking后，最多可以执行Mixed GC的次数|
+| G1OldCSetRegionThresholdPercent | 一次Mixed GC中能够被选入CSet的最多的old generation region数量 |
+|-XX:G1HeapRegionSize=n|设置Region大小，并非最终值|
+|-XX:MaxGCPauseMillis	|设置G1收集过程目标时间，默认值200ms，不是硬性条件|
+|-XX:G1NewSizePercent	|新生代最小值，默认值5%|
+|-XX:G1MaxNewSizePercent	|新生代最大值，默认值60%|
+|-XX:ParallelGCThreads	|STW期间，并行GC线程数|
+|-XX:ConcGCThreads=n	|并发标记阶段，并行执行的线程数|
+|-XX:InitiatingHeapOccupancyPercent	|设置触发标记周期的 Java 堆占用率阈值。默认值是45%。这里的java堆占比指的是non_young_capacity_bytes，包括old+humongous|

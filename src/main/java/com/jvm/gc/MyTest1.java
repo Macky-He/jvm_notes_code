@@ -3,6 +3,12 @@ package com.jvm.gc;
 /**
  * @Title class MyTest1
  * @Description:
+    -verbose:gc
+    -XX:+PrintGCDateStamps
+    -XX:+PrintGCDetails
+    -Xmx20m
+    -Xms20m
+    -Xmn10
  * [GC (Allocation Failure) [PSYoungGen: 8191K->744K(9216K)] 8191K->6896K(19456K), 0.0028412 secs] [Times: user=0.00 sys=0.00, real=0.00 secs]
  * 解释：内存分配失败，为minor GC ;PSYoungGen(parallel scavenge) 默认年轻代垃圾收集器，
  * [Full GC (Ergonomics) [PSYoungGen: 744K->0K(9216K)] [ParOldGen: 6152K->6810K(10240K)] 6896K->6810K(19456K), [Metaspace: 3220K->3220K(1056768K)], 0.0046608 secs] [Times: user=0.00 sys=0.00, real=0.01 secs]
