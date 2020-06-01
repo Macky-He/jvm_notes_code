@@ -116,7 +116,8 @@ Oracle官方文档：https://www.oracle.com/technetwork/tutorials/tutorials-1876
 * 已记忆集合（RSet）：RSet中记录了其他region中的对象引用本region中对象的关系，属于point-into结构（谁引用了我的对象）。RSet
 的价值在于使得垃圾收集器不再扫描整个堆找到谁引用了当前分区的对象，只需要扫描RSet即可。
 * Snapshot-At-The-Beginning（SATB）:是GC开始时的一个存活对象的快照。通过Root Tracing得到，作用是为了维持并发GC的准确定。
-* Humongous区域：如果一个对象占用的空间达到了或是超过了region容量的50%以上，
+* Humongous区域：如果一个对象占用的空间到了或是超过了region容量的50%以上，就称这个对象为humongous对象。这样设计的目的是为了避免在垃圾收集时频繁的复制造成的内存开销。
+* Card Table：每一个Region，又被分成了固定大小的若干张卡(Card)。
 #### 4.4.2 G1的堆分配方式
 ![](src/main/resources/img/Slide9.PNG)
 * G1收集器堆结构
@@ -140,7 +141,9 @@ Oracle官方文档：https://www.oracle.com/technetwork/tutorials/tutorials-1876
     进行整理，GC停顿时间较短
 #### 4.4.3 GC模式
 &nbsp;&nbsp;&nbsp;&nbsp;G1提供了两种GC模式：Young GC和Mixed GC，两种都是完全Stop The Word的。
-* Young GC：选定所有年轻到里的Region。通过控制年轻代Region的个数，即年轻代内存的大小，来控制Young GC的时间开销。
+* Young GC：选定所有年轻代里的Region。通过控制年轻代Region的个数，即年轻代内存的大小，来控制Young GC的时间开销。
+    *说明：Young GC主要是对Eden区进行GC，它在Eden空间即将被耗尽时触发。在这种情况下，Eden空间的数据移动到Survivor空间中，如果Survivor空间不够，Eden
+    空间的数据会被直接晋升到老年代中。Survivor区中的数据也有部分晋升到老年代空间中。最终Eden空间数据为空，应用线程继续工作
 * Mixed GC：选定所有年轻代里的Region，外加根据global concurrent marking统计得出的收集效益最高的老年代Region。在用户指定的停顿时间内尽可能的选择收益高的老年代Region。
 * Full GC：Mixed GC不是Full GC，它只能回收部分年老代的Region，如果Mixed GC实在无法跟上程序分配内存的速度，Mixed GC就会膨胀为Serial Old GC（Full GC）来收集整个GC
  Heap。所以本质上，G1是不提供Full GC的
