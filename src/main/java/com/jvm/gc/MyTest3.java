@@ -3,7 +3,11 @@ package com.jvm.gc;
 /**
  * @Title class MyTest3
  * @Description:
- *
+-Xms10m
+-Xmx10m
+-verbose:gc
+-XX:+UseG1GC
+-XX:+PrintGCDetails
  * @Author Macky
  * @Date 2020/5/8
  */

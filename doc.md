@@ -1,6 +1,5 @@
 # 深入理解JVM笔记
 * 目录
- 
  ## 一、类加载机制
 ### 1.1 概述
     虚拟机把描述类的数据从Class文件加载到内存， 并对数据进行校验、 转换解析和初始化， 最终形成可以被虚拟机直接使用的Java类型， 这就是虚拟机的类加载机制。
@@ -97,6 +96,53 @@
 ## 四、垃圾收集器
 ### 4.1 概览图
 ![概览图](src/main/resources/img/40093687372_3b03521a7c.jpg)
+### 4.3 CMS垃圾收集器
+#### 4.3.1 CMS收集器基本概念
+&nbsp;&nbsp;&nbsp;&nbsp;CMS（Concurrent Mark Sweep）收集器，以获取最短回收停顿时间为目标，多数应用于互联网网站或者B/S系统的服务器端
+* OopMap：存储着对象的引用关系
+#### 4.3.2 CMS收集器过程
+* 步骤：
+    * 初始标记(initial mark)**STW**:只是标记GC Roots直接关联的对象
+    * 并发标记(concurrent mark)：GC Roots Tracing过程
+    * 重新标记(remark)：重新标记阶段是为了修正并发标记期间用户线程继续运行产生的变动那部分对象
+    * 并发清除(concurrent sweep)
+ ![](src/main/resources/img/20170502180239327.png)
+ * 优点：并发收集、低停顿
+ * 缺点：
+    1. CMS收集器对CPU资源敏感
+    2. CMS无法处理浮动垃圾（Float Garbage），可能出现Concurrent Mode Failure失败导致出现full Gc
+    3. 基于标记清除算法，会产生内存碎片问题
+ * CMS收集器步骤：
+    * 1.Initial Mark:标记那些直接被GC Root引用或者被年轻代对象直接引用的所有对象
+    * 2.Concurrent Mark：这个阶段遍历老年代，然后标记所有存活的对象，会根据初始标记阶段的GC Roots遍历查找。
+    * 3.Concurrent Preclean：a)处理新生代新发现的引用，比如在并发阶段，在Eden区中分配了一个A对象，A对象引用了一个老年代对象B（这个B之前没有被标
+                            记），在这个阶段就会标记对象B为活跃对象。
+                            b)在并发标记阶段，如果老年代中有对象内部引用发生变化，会把所在的Card标记为Dirty（其实这里并非使用CardTable，而是一个
+                            类似的数据结构，叫ModUnionTalble），通过扫描这些Table，重新标记那些在并发标记阶段引用被更新的对象（晋升到老年代的对象/
+                            原本就在老年代的对象）
+    * 4.Concurrent Abortable Preclean:a)处理 From 和 To 区的对象，标记可达的老年代对象
+                                      b)和上一个阶段一样，扫描处理Dirty Card中的对象
+                                      该阶段发生的前提是，新生代Eden区的内存使用量大于参数CMSScheduleRemarkEdenSizeThreshold 默认是2M，如果新生代的对象
+                                      太少，就没有必要执行该阶段，直接执行重新标记阶段。
+    * 5.Final Remark:在之前的过程中还会存在一些未标记的对象主要包括：
+                     
+                     	1、老年代的新对象被GC Roots引用
+                     	2、老年代的未标记对象被新生代对象引用
+                     	3、老年代已标记的对象增加新引用指向老年代其它对象
+                     	4、新生代对象指向老年代引用被删除
+                     也许还有其它情况..
+                     
+                     上述对象中可能有一些已经在Precleaning阶段和AbortablePreclean阶段被处理过，但总存在没来得及处理的，所以还有进行如下的处理：
+                     
+                     1、遍历新生代对象，重新标记
+                     2、根据GC Roots，重新标记
+                     3、遍历老年代的Dirty Card，重新标记，这里的Dirty Card大部分已经在clean阶段处理过
+    * 6.Concurrent Sweep:清除垃圾对象，回收内存空间
+    * 7.Concurrent ReSet：重置CMS内部结构，为下次GC做准备   
+| 参数名 | 含义 | 
+| :------ | :------ |
+|-XX:+UseConcMarkSweepGC|使用CMS垃圾收集器|
+|-XX:+UseCMSCompactAtFullCollection|在CMS收集器需要进行full Gc时进行内存碎片整理，内存整理过程是STW的（默认开启）|
 ### 4.4 G1垃圾收集器
 ![HotSpot_JVM架构图](src/main/resources/img/HotSpot_JVM_Architecture.PNG)
 Oracle官方文档：https://www.oracle.com/technetwork/tutorials/tutorials-1876574.html
@@ -117,7 +163,8 @@ Oracle官方文档：https://www.oracle.com/technetwork/tutorials/tutorials-1876
 的价值在于使得垃圾收集器不再扫描整个堆找到谁引用了当前分区的对象，只需要扫描RSet即可。
 * Snapshot-At-The-Beginning（SATB）:是GC开始时的一个存活对象的快照。通过Root Tracing得到，作用是为了维持并发GC的准确定。
 * Humongous区域：如果一个对象占用的空间到了或是超过了region容量的50%以上，就称这个对象为humongous对象。这样设计的目的是为了避免在垃圾收集时频繁的复制造成的内存开销。
-* Card Table：每一个Region，又被分成了固定大小的若干张卡(Card)。
+* Card Table：每一个Region，又被分成了固定大小的若干张卡(Card)。大小通常介于128byte-512byte。默认情况下，每个卡都没被引用，当一个地址空间被引用时，这个地址空间对应的数组索引的值被标记为`0
+`，即被标记为脏引用，此外RSet也将这个数组下标记录下来。一般情况下，这个RSet其实是一个Hash Table，key是别的region的起始地址，Value是一个集合，里面的元素是Card Table的Index
 #### 4.4.2 G1的堆分配方式
 ![](src/main/resources/img/Slide9.PNG)
 * G1收集器堆结构
@@ -142,9 +189,25 @@ Oracle官方文档：https://www.oracle.com/technetwork/tutorials/tutorials-1876
 #### 4.4.3 GC模式
 &nbsp;&nbsp;&nbsp;&nbsp;G1提供了两种GC模式：Young GC和Mixed GC，两种都是完全Stop The Word的。
 * Young GC：选定所有年轻代里的Region。通过控制年轻代Region的个数，即年轻代内存的大小，来控制Young GC的时间开销。
-    *说明：Young GC主要是对Eden区进行GC，它在Eden空间即将被耗尽时触发。在这种情况下，Eden空间的数据移动到Survivor空间中，如果Survivor空间不够，Eden
-    空间的数据会被直接晋升到老年代中。Survivor区中的数据也有部分晋升到老年代空间中。最终Eden空间数据为空，应用线程继续工作
+    * 说明：Young GC主要是对Eden区进行GC，它在Eden空间即将被耗尽时触发。在这种情况下，Eden空间的数据移动到Survivor空间中，如果Survivor空间不够，Eden
+    空间的数据会被直接晋升到老年代中。Survivor区中的数据也有部分晋升到老年代空间中。最终Eden空间数据为空，应用线程继续工作。
+    * 步骤：
+    
+        1.阶段一：根扫描（静态和本地对象被扫描）
+        
+        2.阶段二：更新RSet（处理dirty card队列更新Rset）
+        
+        3.阶段三：处理RSet（检测从年轻代对象指向老年代的对象）
+        
+        4.阶段四：对象拷贝（拷贝存活的对象到survivor/old区域）
+        
+        5.处理引用队列（软引用、弱引用、虚引用处理）
 * Mixed GC：选定所有年轻代里的Region，外加根据global concurrent marking统计得出的收集效益最高的老年代Region。在用户指定的停顿时间内尽可能的选择收益高的老年代Region。
+    * 步骤：
+    
+    1.全局并发标记（global concurrent marking）
+    
+    2.拷贝存活对象（evacuation）
 * Full GC：Mixed GC不是Full GC，它只能回收部分年老代的Region，如果Mixed GC实在无法跟上程序分配内存的速度，Mixed GC就会膨胀为Serial Old GC（Full GC）来收集整个GC
  Heap。所以本质上，G1是不提供Full GC的
 #### 4.4.4 global concurrent marking
@@ -154,6 +217,34 @@ Oracle官方文档：https://www.oracle.com/technetwork/tutorials/tutorials-1876
     2. 并发标记（concurrent mark）：这个阶段从GC Root开始对heap中的对象进行标记，标记线程和应用线程并发执行，并且收集各个region中的存活对象的信息
     3. 重新标记（remark）：标记在并发标记阶段变化的对象
     4. 清理（cleanup）：清除空region（没有存活对象的），加入到free list中 
+* 三色标记算法
+    * 黑色：根对象，或者该对象与它的子对象都被扫描过（该根对象被标记了，且它的所有field也被标记完了）
+    * 灰色：对象本身被标记了，但是它的子对象还未标记完（它的子对象没被标记或者没被标记完）
+    * 白色：未被扫描对象，扫描完成所有对象后，最终为白色的为不可达对象，即垃圾对象。
+* 使用SATB（Snapshot-At-The-Beginning），是GC开始时活着的对象的一个快照。
+
+&nbsp;&nbsp;&nbsp;&nbsp;三个步骤：
+
+    1.开始标记时生成一个快照图，标记存活的对象
+    2.在并发标记阶段所有被改变的对象入队（在write barrier里把所有旧的的引用所指向的对象都变成非白的）
+    3.可能存在浮动垃圾，将在下次被收集
+    
+* 对象漏标情况？
+     * Mutator赋予一个黑对象该白对象的引用。 （利用post—write barrier，记录所有新增的引用关系，然后根据这些引用关系为根重新扫描一遍）
+     * Mutator删除了所有从灰对象到该白对象的直接或者间接引用。（利用pre-write barrier，将所有即将被删除的引用关系的旧引用记录下来，最后以旧引用为根重新扫描一遍）
+     * 解决办法
+        * Region中有两个top-at-mark-start（TAMS）指针，分别为prevTAMS和nextTAMS。在TAMS以上的对象是新分配的，这是一种隐式的标记。对于在GC
+        时已经存在的白对象，如果它是活着的，它必然会被另一个对象引用，即条件二中的灰对象。如果灰对象到白对象的直接引用或者间接引用被替换了，或者删除了，白对象就会被漏标，从而导致被回收掉，这是非常严重的错误，所以SATB破坏了第二个条件。也就是说，一个对象的引用被替换时，可以通过write barrier 将旧引用记录下来。
+* 为什么要对老年代进行分区？ 为什么要对新生代代进行分区？
+
+答：老年代有的分区垃圾多有的垃圾少，这样在回收时专注于收集垃圾多的分区。新生代使用分区主要是为了便于代大小的调整
+* 停顿可预测模型
+&nbsp;&nbsp;&nbsp;&nbsp;G1收集器的一大特点是通过一个停顿可预测模型根据用户配置的停顿时间来选择CSet的大小，以尽力达到用户通过-XX:MaxGCPauseMillis
+参数所设置的停顿时时间。停顿时间设置太短意味着每次收集的CSet越小，导致垃圾逐步积累增多，最终退化为Serial GC，停顿时间设置太长，会导致每次都会产生长时间的停顿，影响程序的响应时间。
+* G1实践
+    * 不断调优暂停时间指标
+    * 不要设置新生代和老年代的大小
+    * 关注Evacuation Failure（堆空间垃圾太多无法完成region之间的拷贝）
 #### 4.4.8 常用G1参数
 | 参数名 | 含义 | 
 | :------ | :------ |
